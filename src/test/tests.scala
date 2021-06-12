@@ -9,10 +9,14 @@ import scala.annotation.StaticAnnotation
 
 type ShowStr = [X] =>> Show[String, X]
 
+<<<<<<< HEAD
 sealed trait Tree[+T] derives Eq
 object Tree:
   given [T: [X] =>> Show[String, X]]: Show[String, Tree[T]] = Show.derived
 
+=======
+sealed trait Tree[+T]
+>>>>>>> Params hopefully
 case class Leaf[+L](value: L) extends Tree[L]
 case class Branch[+B](left: Tree[B], right: Tree[B]) extends Tree[B]
 
@@ -32,9 +36,6 @@ class Length(val value: Int) extends AnyVal
 case class FruitBasket(fruits: Fruit*)
 case class Lunchbox(fruit: Fruit, drink: String)
 case class Fruit(name: String)
-
-object Fruit:
-  given showFruit: Show[String, Fruit] = (f: Fruit) => f.name
 
 case class Item(name: String, quantity: Int = 1, price: Int)
 
@@ -91,9 +92,6 @@ case class Account(id: String, emails: String*)
 case class Portfolio(companies: Company*)
 
 case class Recursive(children: Seq[Recursive])
-object Recursive {
-  given showRecursive: Show[String, Recursive] = Show.derived[Recursive]
-}
 
 // This tests compilation.
 // class GenericCsv[A: Csv]
@@ -115,23 +113,18 @@ case class MyDto(foo: String, bar: Int)
 case class Event(date: LocalDate)
 
 case class RPerson(age: Int, name: String, children: Seq[RPerson])
-object RPerson {
-  given Show[String, RPerson] = Show.derived
-}
 case class GPerson(children: Seq[RPerson])
 
 case class ProtectedCons protected (name: String)
 object ProtectedCons {
   def apply(firstName: String, familyName: String): ProtectedCons =
     new ProtectedCons(firstName + " " + familyName)
-  given show: Show[String, ProtectedCons] = Show.derived
 }
 
 case class PrivateCons private (name: String)
 object PrivateCons {
   def apply(firstName: String, familyName: String): PrivateCons =
     new PrivateCons(firstName + " " + familyName)
-  given show: Show[String, PrivateCons] = Show.derived
 }
 
 // class PrivateValueClass private (val value: Int) extends AnyVal
@@ -140,7 +133,7 @@ object PrivateCons {
 //   implicit val show: Show[String, PrivateValueClass] = Show.derived
 // }
 
-case class KArray(value: List[KArray]) derives Eq
+case class KArray(value: List[KArray])
 case class Wrapper(v: Option[KArray])
 
 case class VeryLong(
