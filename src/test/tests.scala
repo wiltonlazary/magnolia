@@ -9,14 +9,10 @@ import scala.annotation.StaticAnnotation
 
 type ShowStr = [X] =>> Show[String, X]
 
-<<<<<<< HEAD
 sealed trait Tree[+T] derives Eq
 object Tree:
   given [T: [X] =>> Show[String, X]]: Show[String, Tree[T]] = Show.derived
 
-=======
-sealed trait Tree[+T]
->>>>>>> Params hopefully
 case class Leaf[+L](value: L) extends Tree[L]
 case class Branch[+B](left: Tree[B], right: Tree[B]) extends Tree[B]
 
@@ -567,9 +563,23 @@ class Tests extends munit.FunSuite {
     assertEquals(derivedSubtypeInfo.isEnum, true)
   }
 
+<<<<<<< HEAD
   test("isEnum field in SubtypeInfo should be false for sealed trait") {
     val derivedSubtypeInfo = SubtypeInfo.derived[Sport]
     assertEquals(derivedSubtypeInfo.isEnum, false)
+=======
+    test("not find a given for semi print") {
+      val res = compileErrors("""summon[SemiPrint[Y]].print(A)""")
+      assert(res.nonEmpty)
+    }
+
+    test("work in some other way") {
+      sealed trait T
+      case class C(s: String) extends T
+      val res = Print.derived[T].print(C("XD"))
+      assertEquals(res, """C(XD)""")
+    }
+>>>>>>> Change subtype a bit
   }
 
   test("construct a Show instance for an enum") {
