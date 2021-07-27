@@ -25,7 +25,7 @@ object Macro:
   def isSumImpl[T: Type](using Quotes): Expr[Boolean] =
     import quotes.reflect.*
     val typeSymbol = TypeRepr.of[T].typeSymbol
-    Expr(typeSymbol.flags.is(Flags.Sealed))
+    Expr((typeSymbol.flags.is(Flags.Sealed) && typeSymbol.flags.is(Flags.Trait)) || typeSymbol.flags.is(Flags.Enum))
 
   def summonOptionImpl[T: Type](using Quotes): Expr[Option[T]] =
     Expr.summon[T] match
