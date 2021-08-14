@@ -160,8 +160,8 @@ trait MacroDerivation[TypeClass[_]]:
   def split[T](ctx: SealedTrait[Typeclass, T]): Typeclass[T]
   def join[T](ctx: CaseClass[Typeclass, T]): Typeclass[T]
 
-  transparent inline def derived[T]: Typeclass[T] =
-    if isProduct[T] then
+  inline def derived[T]: Typeclass[T] =
+    inline if isProduct[T] then
       val cc = new CaseClass[Typeclass, T](
         typeInfo[T],
         isObject[T],
@@ -176,7 +176,7 @@ trait MacroDerivation[TypeClass[_]]:
         def constructMonadic[M[_]: Monadic, PType: ClassTag](makeParam: Param => M[PType]): M[T] = ???
       }
       join(cc)
-    else if isSum[T] then
+    else inline if isSum[T] then
       val sealedTrait = SealedTrait[Typeclass, T](
         typeInfo[T],
         MacroDerivation.getSubtypes[Typeclass, T],
@@ -185,15 +185,18 @@ trait MacroDerivation[TypeClass[_]]:
       )
       split(sealedTrait)
     else
-      // summonInline[Typeclass[T]] // <-- this is tried to be summoned even if not needed
-      ???
+      summonInline[Typeclass[T]]
 
 end MacroDerivation
 
 object MacroDerivation:
 
-  inline def getParams[Typeclass[_], T]: List[CaseClass.Param[Typeclass, T]] = ${getParamsImpl[Typeclass, T]}
-  inline def getSubtypes[Typeclass[_], T]: List[SealedTrait.Subtype[Typeclass, T, _]] = ${getSubtypesImpl[Typeclass, T]}
+  case class Proxy[A]()
+
+  inline def getParams[Typeclass[_], T]: List[CaseClass.Param[Typeclass, T]] =
+    ${ getParamsImpl[Typeclass, T] }
+  inline def getSubtypes[Typeclass[_], T]: List[SealedTrait.Subtype[Typeclass, T, _]] =
+    ${ getSubtypesImpl[Typeclass, T] }
 
   def getParamsImpl[Typeclass[_]: Type, T: Type](using Quotes): Expr[List[CaseClass.Param[Typeclass, T]]] =
     import quotes.reflect.*
