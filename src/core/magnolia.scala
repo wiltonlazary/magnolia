@@ -191,32 +191,44 @@ end MacroDerivation
 
 object MacroDerivation:
 
-  case class Proxy[A]()
-
   inline def getParams[Typeclass[_], T]: List[CaseClass.Param[Typeclass, T]] =
     ${ getParamsImpl[Typeclass, T] }
+  def getParamsImpl[Typeclass[_]: Type, T: Type](using Quotes): Expr[List[CaseClass.Param[Typeclass, T]]] =
+    new MacroDerivationImpl(using quotes).getParamsImpl[Typeclass, T]
+
   inline def getSubtypes[Typeclass[_], T]: List[SealedTrait.Subtype[Typeclass, T, _]] =
     ${ getSubtypesImpl[Typeclass, T] }
+  def getSubtypesImpl[Typeclass[_]: Type, T: Type](using Quotes): Expr[List[SealedTrait.Subtype[Typeclass, T, _]]] =
+    new MacroDerivationImpl(using quotes).getSubtypesImpl[Typeclass, T]
 
-  def getParamsImpl[Typeclass[_]: Type, T: Type](using Quotes): Expr[List[CaseClass.Param[Typeclass, T]]] =
-    import quotes.reflect.*
+end MacroDerivation
 
-    def isRepeated[T](tpeRepr: TypeRepr): Boolean = tpeRepr match
-      case a: AnnotatedType =>
-        a.annotation.tpe match
-          case tr: TypeRef => tr.name == "Repeated"
-          case _           => false
-      case _ => false
+class MacroDerivationImpl(using Quotes):
+  import quotes.reflect.*
 
-    def getTypeAnnotations(t: TypeRepr): List[Term] = t match
-      case AnnotatedType(inner, ann) => ann :: getTypeAnnotations(inner)
-      case _                         => Nil
+  case class Proxy[A]()
 
-    def filterAnnotations(annotations: List[Term]): List[Term] =
-      annotations.filter { a =>
-        a.tpe.typeSymbol.maybeOwner.isNoSymbol ||
-          a.tpe.typeSymbol.owner.fullName != "scala.annotation.internal"
-      }
+  private def isRepeated[T](tpeRepr: TypeRepr): Boolean = tpeRepr match
+    case a: AnnotatedType =>
+      a.annotation.tpe match
+        case tr: TypeRef => tr.name == "Repeated"
+        case _           => false
+    case _ => false
+
+  private def getTypeAnnotations(t: TypeRepr): List[Term] = t match
+    case AnnotatedType(inner, ann) => ann :: getTypeAnnotations(inner)
+    case _                         => Nil
+
+  private def filterAnnotations(annotations: List[Term]): List[Term] =
+    annotations.filter { a =>
+      a.tpe.typeSymbol.maybeOwner.isNoSymbol ||
+        a.tpe.typeSymbol.owner.fullName != "scala.annotation.internal"
+    }
+
+  private def termFromInlinedTypeApplyUnsafe(t: Term): Term = t match
+    case Inlined(_, _, TypeApply(term, _)) => term
+
+  def getParamsImpl[Typeclass[_]: Type, T: Type]: Expr[List[CaseClass.Param[Typeclass, T]]] =
 
     val typeSymbol = TypeRepr.of[T].typeSymbol
 
@@ -225,9 +237,6 @@ object MacroDerivation:
 
     val annotations = paramAnns[T].to(Map)
     val typeAnnotations = paramTypeAnns[T].to(Map)
-
-    def termFromInlinedTypeApplyUnsafe(t: Term): Term = t match
-      case Inlined(_, _, TypeApply(term, _)) => term
 
     Expr.ofList {
       typeSymbol.caseFields.zipWithIndex.collect {
@@ -263,8 +272,7 @@ object MacroDerivation:
 
   end getParamsImpl
 
-  def getSubtypesImpl[Typeclass[_]: Type, T: Type](using Quotes): Expr[List[SealedTrait.Subtype[Typeclass, T, _]]] =
-    import quotes.reflect.*
+  def getSubtypesImpl[Typeclass[_]: Type, T: Type]: Expr[List[SealedTrait.Subtype[Typeclass, T, _]]] =
 
     val typeSymbol = TypeRepr.of[T].typeSymbol
 
@@ -290,4 +298,4 @@ object MacroDerivation:
 
   end getSubtypesImpl
 
-end MacroDerivation
+end MacroDerivationImpl
