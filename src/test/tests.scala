@@ -213,6 +213,33 @@ enum Size:
 
 class Tests extends munit.FunSuite {
 
+  // test("work in some other way") {
+  //   sealed trait T
+  //   case class C(s: String) extends T
+  //   val res = Print.derived[T].print(C("XD"))
+  //   assertEquals(res, """C(XD)""")
+  // }
+
+  test("work for a product type") {
+    case class C(s: String)
+    val res = Print.derived[C].print(C("XD"))
+    assertEquals(res, """C(XD)""")
+  }
+
+  test("work for nested product type with derives clause") {
+    case class A(a: Int) derives Print
+    case class C(s: String, a: A)
+    val res = Print.derived[C].print(C("XD", A(1)))
+    assertEquals(res, """C(XD,A(1))""")
+  }
+
+  test("work for nested product type without derives clause") {
+    case class A(a: Int)
+    case class C(s: String, a: A)
+    val res = Print.derived[C].print(C("XD", A(1)))
+    assertEquals(res, """C(XD,A(1))""")
+  }
+
   test("construct a Show product instance with alternative apply functions") {
     val res = Show.derived[TestEntry].show(TestEntry("a", "b"))
     assertEquals(res, """TestEntry(param=Param(a=a,b=b))""")
@@ -563,23 +590,9 @@ class Tests extends munit.FunSuite {
     assertEquals(derivedSubtypeInfo.isEnum, true)
   }
 
-<<<<<<< HEAD
   test("isEnum field in SubtypeInfo should be false for sealed trait") {
     val derivedSubtypeInfo = SubtypeInfo.derived[Sport]
     assertEquals(derivedSubtypeInfo.isEnum, false)
-=======
-    test("not find a given for semi print") {
-      val res = compileErrors("""summon[SemiPrint[Y]].print(A)""")
-      assert(res.nonEmpty)
-    }
-
-    test("work in some other way") {
-      sealed trait T
-      case class C(s: String) extends T
-      val res = Print.derived[T].print(C("XD"))
-      assertEquals(res, """C(XD)""")
-    }
->>>>>>> Change subtype a bit
   }
 
   test("construct a Show instance for an enum") {
