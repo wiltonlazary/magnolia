@@ -13,7 +13,7 @@ trait CommonDerivation[TypeClass[_]]:
   inline def derivedMirrorProduct[A](
       product: Mirror.ProductOf[A]
   ): Typeclass[A] =
-    val parameters = IArray(
+    val parameters = List(
       getParams[A, product.MirroredElemLabels, product.MirroredElemTypes](
         paramAnns[A].to(Map),
         paramTypeAnns[A].to(Map),
@@ -26,8 +26,8 @@ trait CommonDerivation[TypeClass[_]]:
       isObject[A],
       isValueClass[A],
       parameters,
-      IArray(anns[A]*),
-      IArray[Any](typeAnns[A]*)
+      List(anns[A]*),
+      List[Any](typeAnns[A]*)
     ):
 
       def construct[PType](
@@ -89,8 +89,8 @@ trait CommonDerivation[TypeClass[_]]:
           repeated.getOrElse(label, false),
           typeclass,
           CallByNeed(None),
-          IArray.from(annotations.getOrElse(label, List())),
-          IArray.from(typeAnnotations.getOrElse(label, List()))
+          List.from(annotations.getOrElse(label, List())),
+          List.from(typeAnnotations.getOrElse(label, List()))
         ) ::
           getParams[T, ltail, ptail](
             annotations,
@@ -121,8 +121,8 @@ trait Derivation[TypeClass[_]] extends CommonDerivation[TypeClass]:
       case _: (s *: tail) =>
         new SealedTrait.Subtype(
           typeInfo[s],
-          IArray.from(anns[s]),
-          IArray.from(paramTypeAnns[T]),
+          List.from(anns[s]),
+          List.from(paramTypeAnns[T]),
           isObject[s],
           idx,
           CallByNeed(summonFrom {
@@ -136,9 +136,9 @@ trait Derivation[TypeClass[_]] extends CommonDerivation[TypeClass]:
   inline def derivedMirrorSum[A](sum: Mirror.SumOf[A]): Typeclass[A] =
     val sealedTrait = SealedTrait(
       typeInfo[A],
-      IArray(subtypes[A, sum.MirroredElemTypes](sum)*),
-      IArray.from(anns[A]),
-      IArray(paramTypeAnns[A]*),
+      List(subtypes[A, sum.MirroredElemTypes](sum)*),
+      List.from(anns[A]),
+      List(paramTypeAnns[A]*),
       isEnum[A]
     )
 
@@ -181,7 +181,8 @@ trait MacroDerivation[TypeClass[_]]:
         typeInfo[T],
         MacroDerivation.getSubtypes[Typeclass, T],
         List[Any](),
-        paramTypeAnns[T]
+        paramTypeAnns[T],
+        false
       )
       split(sealedTrait)
     else
