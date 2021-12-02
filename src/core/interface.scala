@@ -111,10 +111,11 @@ case class SealedTrait[Typeclass[_], Type](
     s"SealedTrait($typeInfo, List[${subtypes.mkString(",")}])"
 
   def choose[Return](value: Type)(handle: Subtype[_] => Return): Return =
-    @tailrec def rec(ix: Int): Return =
+    @tailrec
+    def rec(ix: Int): Return =
       if ix < subtypes.length then
         val sub = subtypes(ix)
-        if sub.cast.isDefinedAt(value) then
+        if sub.isDefinedAt(value) then
           handle(SealedTrait.SubtypeValue(sub, value))
         else rec(ix + 1)
       else
@@ -144,6 +145,26 @@ object SealedTrait:
     def isDefinedAt(t: Type): Boolean = isType(t)
     def apply(t: Type): SType & Type = asType(t)
     override def toString: String = s"Subtype(${typeInfo.full})"
+
+  object Subtype:
+    def apply[Typeclass[_], Type, SType](
+      typeInfo: TypeInfo,
+      annotations: List[Any],
+      typeAnnotations: List[Any],
+      isObject: Boolean,
+      index: Int,
+      callByNeed: CallByNeed[Typeclass[SType]]
+    ) =
+      new Subtype[Typeclass, Type, SType](
+        typeInfo,
+        annotations,
+        typeAnnotations,
+        isObject,
+        index,
+        callByNeed,
+        _.isInstanceOf[SType & Type],
+        _.asInstanceOf[SType & Type]
+      )
 
   class SubtypeValue[Typeclass[_], Type, S](
       val subtype: Subtype[Typeclass, Type, S],

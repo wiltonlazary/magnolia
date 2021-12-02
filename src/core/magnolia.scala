@@ -6,156 +6,10 @@ import scala.quoted.*
 import scala.reflect.*
 import Macro.*
 
-trait CommonDerivation[TypeClass[_]]:
-  type Typeclass[T] = TypeClass[T]
-  def join[T](ctx: CaseClass[Typeclass, T]): Typeclass[T]
-
-  inline def derivedMirrorProduct[A](
-      product: Mirror.ProductOf[A]
-  ): Typeclass[A] =
-    val parameters = List(
-      getParams[A, product.MirroredElemLabels, product.MirroredElemTypes](
-        paramAnns[A].to(Map),
-        paramTypeAnns[A].to(Map),
-        repeated[A].to(Map)
-      )*
-    )
-
-    val caseClass = new CaseClass[Typeclass, A](
-      typeInfo[A],
-      isObject[A],
-      isValueClass[A],
-      parameters,
-      List(anns[A]*),
-      List[Any](typeAnns[A]*)
-    ):
-
-      def construct[PType](
-          makeParam: Param => PType
-      )(using ClassTag[PType]): A =
-        product.fromProduct(
-          Tuple.fromArray(this.params.map(makeParam(_)).to(Array))
-        )
-
-      def rawConstruct(fieldValues: Seq[Any]): A =
-        product.fromProduct(Tuple.fromArray(fieldValues.to(Array)))
-
-      def constructEither[Err, PType: ClassTag](
-          makeParam: Param => Either[Err, PType]
-      ): Either[List[Err], A] =
-        params
-          .map(makeParam(_))
-          .to(Array)
-          .foldLeft[Either[List[Err], Array[PType]]](Right(Array())) {
-            case (Left(errs), Left(err))    => Left(errs ++ List(err))
-            case (Right(acc), Right(param)) => Right(acc ++ Array(param))
-            case (errs @ Left(_), _)        => errs
-            case (_, Left(err))             => Left(List(err))
-          }
-          .map { params => product.fromProduct(Tuple.fromArray(params)) }
-
-      def constructMonadic[M[_]: Monadic, PType: ClassTag](
-          makeParam: Param => M[PType]
-      ): M[A] =
-        summon[Monadic[M]].map {
-          params
-            .map(makeParam(_))
-            .to(Array)
-            .foldLeft(summon[Monadic[M]].point(Array())) { (accM, paramM) =>
-              summon[Monadic[M]].flatMap(accM) { acc =>
-                summon[Monadic[M]].map(paramM)(acc ++ List(_))
-              }
-            }
-        } { params => product.fromProduct(Tuple.fromArray(params)) }
-
-    join(caseClass)
-
-  inline def getParams[T, Labels <: Tuple, Params <: Tuple](
-      annotations: Map[String, List[Any]],
-      typeAnnotations: Map[String, List[Any]],
-      repeated: Map[String, Boolean],
-      idx: Int = 0
-  ): List[CaseClass.Param[Typeclass, T]] =
-    inline erasedValue[(Labels, Params)] match
-      case _: (EmptyTuple, EmptyTuple) =>
-        Nil
-      case _: ((l *: ltail), (p *: ptail)) =>
-        val label = constValue[l].asInstanceOf[String]
-        val typeclass = CallByNeed(summonInline[Typeclass[p]])
-
-        CaseClass.Param[Typeclass, T, p](
-          label,
-          idx,
-          repeated.getOrElse(label, false),
-          typeclass,
-          CallByNeed(None),
-          List.from(annotations.getOrElse(label, List())),
-          List.from(typeAnnotations.getOrElse(label, List()))
-        ) ::
-          getParams[T, ltail, ptail](
-            annotations,
-            typeAnnotations,
-            repeated,
-            idx + 1
-          )
-end CommonDerivation
-
-trait ProductDerivation[TypeClass[_]] extends CommonDerivation[TypeClass]:
-  inline def derivedMirror[A](using mirror: Mirror.Of[A]): Typeclass[A] =
-    inline mirror match
-      case product: Mirror.ProductOf[A] => derivedMirrorProduct[A](product)
-
-  inline given derived[A](using Mirror.Of[A]): Typeclass[A] = derivedMirror[A]
-end ProductDerivation
-
-trait Derivation[TypeClass[_]] extends CommonDerivation[TypeClass]:
-  def split[T](ctx: SealedTrait[Typeclass, T]): Typeclass[T]
-
-  transparent inline def subtypes[T, SubtypeTuple <: Tuple](
-      m: Mirror.SumOf[T],
-      idx: Int = 0
-  ): List[SealedTrait.Subtype[Typeclass, T, _]] =
-    inline erasedValue[SubtypeTuple] match
-      case _: EmptyTuple =>
-        Nil
-      case _: (s *: tail) =>
-        new SealedTrait.Subtype(
-          typeInfo[s],
-          List.from(anns[s]),
-          List.from(paramTypeAnns[T]),
-          isObject[s],
-          idx,
-          CallByNeed(summonFrom {
-            case tc: Typeclass[`s`] => tc
-            case _ => derived(using summonInline[Mirror.Of[s]])
-          }),
-          x => m.ordinal(x) == idx,
-          _.asInstanceOf[s & T]
-        ) :: subtypes[T, tail](m, idx + 1)
-
-  inline def derivedMirrorSum[A](sum: Mirror.SumOf[A]): Typeclass[A] =
-    val sealedTrait = SealedTrait(
-      typeInfo[A],
-      List(subtypes[A, sum.MirroredElemTypes](sum)*),
-      List.from(anns[A]),
-      List(paramTypeAnns[A]*),
-      isEnum[A]
-    )
-
-    split(sealedTrait)
-
-  inline def derivedMirror[A](using mirror: Mirror.Of[A]): Typeclass[A] =
-    inline mirror match
-      case sum: Mirror.SumOf[A]         => derivedMirrorSum[A](sum)
-      case product: Mirror.ProductOf[A] => derivedMirrorProduct[A](product)
-
-  inline def derived[A](using Mirror.Of[A]): Typeclass[A] = derivedMirror[A]
-end Derivation
-
 trait AutoDerivation[TypeClass[_]] extends Derivation[TypeClass]:
-  inline given autoDerived[A](using Mirror.Of[A]): TypeClass[A] = derived
+  inline given autoDerived[A]: TypeClass[A] = derived
 
-trait MacroDerivation[TypeClass[_]]:
+trait Derivation[TypeClass[_]]:
   type Typeclass[T] = TypeClass[T]
   def split[T](ctx: SealedTrait[Typeclass, T]): Typeclass[T]
   def join[T](ctx: CaseClass[Typeclass, T]): Typeclass[T]
@@ -168,7 +22,7 @@ trait MacroDerivation[TypeClass[_]]:
         typeInfo[T],
         isObject[T],
         isValueClass[T],
-        MacroDerivation.getParams[Typeclass, T] { this },
+        Derivation.getParams[Typeclass, T](this),
         anns[T],
         typeAnns[T]
       ) {
@@ -181,30 +35,30 @@ trait MacroDerivation[TypeClass[_]]:
     else
       val sealedTrait = SealedTrait[Typeclass, T](
         typeInfo[T],
-        MacroDerivation.getSubtypes[Typeclass, T],
+        Derivation.getSubtypes[Typeclass, T](this),
         List[Any](),
         paramTypeAnns[T],
         false
       )
       split(sealedTrait)
 
-end MacroDerivation
+end Derivation
 
-object MacroDerivation:
+object Derivation:
 
-  inline def getParams[Typeclass[_], T](fallback: MacroDerivation[Typeclass]): List[CaseClass.Param[Typeclass, T]] =
+  inline def getParams[Typeclass[_], T](fallback: Derivation[Typeclass]): List[CaseClass.Param[Typeclass, T]] =
     ${ getParamsImpl[Typeclass, T]('fallback) }
-  def getParamsImpl[Typeclass[_]: Type, T: Type](using Quotes)(fallback: Expr[MacroDerivation[Typeclass]]): Expr[List[CaseClass.Param[Typeclass, T]]] =
-    new MacroDerivationImpl(using quotes).getParamsImpl[Typeclass, T](fallback)
+  def getParamsImpl[Typeclass[_]: Type, T: Type](using Quotes)(fallback: Expr[Derivation[Typeclass]]): Expr[List[CaseClass.Param[Typeclass, T]]] =
+    new DerivationImpl(using quotes).getParamsImpl[Typeclass, T](fallback)
 
-  inline def getSubtypes[Typeclass[_], T]: List[SealedTrait.Subtype[Typeclass, T, _]] =
-    ${ getSubtypesImpl[Typeclass, T] }
-  def getSubtypesImpl[Typeclass[_]: Type, T: Type](using Quotes): Expr[List[SealedTrait.Subtype[Typeclass, T, _]]] =
-    new MacroDerivationImpl(using quotes).getSubtypesImpl[Typeclass, T]
+  inline def getSubtypes[Typeclass[_], T](fallback: Derivation[Typeclass]): List[SealedTrait.Subtype[Typeclass, T, _]] =
+    ${ getSubtypesImpl[Typeclass, T]('fallback) }
+  def getSubtypesImpl[Typeclass[_]: Type, T: Type](fallback: Expr[Derivation[Typeclass]])(using Quotes): Expr[List[SealedTrait.Subtype[Typeclass, T, _]]] =
+    new DerivationImpl(using quotes).getSubtypesImpl[Typeclass, T](fallback)
 
-end MacroDerivation
+end Derivation
 
-class MacroDerivationImpl(using Quotes):
+class DerivationImpl(using Quotes):
   import quotes.reflect.*
 
   private def isRepeated[T](tpeRepr: TypeRepr): Boolean = tpeRepr match
@@ -213,6 +67,56 @@ class MacroDerivationImpl(using Quotes):
         case tr: TypeRef => tr.name == "Repeated"
         case _           => false
     case _ => false
+
+  private def isObject(typeRepr: TypeRepr): Boolean =
+    import quotes.reflect.*
+
+    typeRepr.typeSymbol.flags.is(Flags.Module)
+
+  private def typeInfo(tpe: TypeRepr): Expr[TypeInfo] =
+    import quotes.reflect._
+
+    def normalizedName(s: Symbol): String = if s.flags.is(Flags.Module) then s.name.stripSuffix("$") else s.name
+    def name(tpe: TypeRepr): Expr[String] = tpe match
+      case TermRef(typeRepr, name) if tpe.typeSymbol.flags.is(Flags.Module) => Expr(name.stripSuffix("$"))
+      case TermRef(typeRepr, name) => Expr(name)
+      case _ => Expr(normalizedName(tpe.typeSymbol))
+
+    def ownerNameChain(sym: Symbol): List[String] =
+      if sym.isNoSymbol then List.empty
+      else if sym == defn.EmptyPackageClass then List.empty
+      else if sym == defn.RootPackage then List.empty
+      else if sym == defn.RootClass then List.empty
+      else ownerNameChain(sym.owner) :+ normalizedName(sym)
+
+    def owner(tpe: TypeRepr): Expr[String] = Expr(
+      ownerNameChain(tpe.typeSymbol.maybeOwner).mkString(".")
+    )
+
+    tpe match
+      case AppliedType(tpe, args) =>
+        '{
+          TypeInfo(
+            ${ owner(tpe) },
+            ${ name(tpe) },
+            ${ Expr.ofList(args.map(typeInfo)) }
+          )
+        }
+      case _ =>
+        '{ TypeInfo(${ owner(tpe) }, ${ name(tpe) }, Nil) }
+
+  def to[T: Type, R: Type](f: Expr[T] => Expr[R])(using Quotes): Expr[T => R] = '{ (x: T) => ${ f('x) } }
+
+  private def isType[T: Type](typeRepr: TypeRepr): Expr[T => Boolean] = to { other =>
+    Expr(other.asTerm.tpe == typeRepr)
+  }
+
+  private def asType[T: Type, S: Type](parent: TypeTree, child: TypeTree): Expr[T => S & T] = to[T, S & T] { t =>
+    val resultTypeRepr = AndType(child.tpe, parent.tpe)
+    val resultTypeTree = TypeTree.of(using resultTypeRepr.asType)
+    println(resultTypeTree)
+    TypeApply(Select.unique(t.asTerm, "asInstanceOf"), List(resultTypeTree)).asExprOf[S & T]
+  }
 
   private def getTypeAnnotations(t: TypeRepr): List[Term] = t match
     case AnnotatedType(inner, ann) => ann :: getTypeAnnotations(inner)
@@ -232,7 +136,7 @@ class MacroDerivationImpl(using Quotes):
     val callByNeedApply = TypeRepr.of[CallByNeed.type].termSymbol.declaredMethod("apply").head
     Apply(TypeApply(Select(callByNeedTerm, callByNeedApply), List(tpt)), List(term))
 
-  def getParamsImpl[Typeclass[_]: Type, T: Type](fallback: Expr[MacroDerivation[Typeclass]]): Expr[List[CaseClass.Param[Typeclass, T]]] =
+  def getParamsImpl[Typeclass[_]: Type, T: Type](fallback: Expr[Derivation[Typeclass]]): Expr[List[CaseClass.Param[Typeclass, T]]] =
 
     val typeSymbol = TypeRepr.of[T].typeSymbol
 
@@ -271,7 +175,7 @@ class MacroDerivationImpl(using Quotes):
               /*cbn =*/ paramTypeclassTree.tpe.asType match
                 case '[p] =>
                   Expr.summon[p].map(_ => instance).getOrElse(fallbackCallByNeedTerm)
-              , //TODO FIX ME
+              ,
               /*defaultVal =*/ '{CallByNeed(None)}.asTerm,
               /*annotations =*/ Expr.ofList(filterAnnotations(paramSymbol.annotations).toSeq.map(_.asExpr)).asTerm,
               /*typeAnnotations =*/ Expr.ofList(filterAnnotations(getTypeAnnotations(paramTypeTree.tpe)).toSeq.map(_.asExpr)).asTerm
@@ -282,30 +186,53 @@ class MacroDerivationImpl(using Quotes):
 
   end getParamsImpl
 
-  def getSubtypesImpl[Typeclass[_]: Type, T: Type]: Expr[List[SealedTrait.Subtype[Typeclass, T, _]]] =
+  def getSubtypesImpl[Typeclass[_]: Type, T: Type](fallback: Expr[Derivation[Typeclass]]): Expr[List[SealedTrait.Subtype[Typeclass, T, _]]] =
 
     val typeSymbol = TypeRepr.of[T].typeSymbol
+    val parentTypeTree = TypeTree.of[T]
+
+    val subTypeObj = '{SealedTrait.Subtype}.asTerm
+    val subTypeConstrSymbol = TypeRepr.of[SealedTrait.Subtype.type].termSymbol.declaredMethod("apply").head
+
+    val annotations = paramAnns[T].to(Map)
+    val typeAnnotations = paramTypeAnns[T].to(Map)
 
     Expr.ofList {
       typeSymbol.children.zipWithIndex.collect {
         case (subTypeSymbol: Symbol, idx: Int) =>
-          val subTypeTypeTree: TypeTree = TypeIdent(subTypeSymbol)
-          subTypeTypeTree.tpe.asType match
-            case '[s] =>
-              '{
-                new SealedTrait.Subtype(
-                  Macro.typeInfo[s],
-                  Macro.anns[s],
-                  Macro.typeAnns[s],
-                  Macro.isObject[s],
-                  0 /*FIX ME*/,
-                  CallByNeed(summonInline[Typeclass[s]]) /*CHANGE ME*/,
-                  x => x.isInstanceOf[s & T],
-                  _.asInstanceOf[s & T])
+          val classDef: ClassDef = subTypeSymbol.tree.asInstanceOf[ClassDef]
+          val subTypeTypeTree: TypeTree = TypeIdent(subTypeSymbol) //TODO TypeTree of classDef
+          val subTypeTypeclassTree = Applied(TypeTree.of[Typeclass], List(subTypeTypeTree))
+          val summonInlineTerm = termFromInlinedTypeApplyUnsafe('{scala.compiletime.summonInline}.asTerm)
+          val summonInlineApp = TypeApply(summonInlineTerm, List(subTypeTypeclassTree))
+          val instance = wrapInCallByNeedTerm(summonInlineApp, subTypeTypeclassTree)
+          val fallbackTerm = fallback.asTerm match
+            case Inlined(_, _, i) => i
+          val appliedFallbackTerm = TypeApply(Select(Ref(fallbackTerm.symbol), fallbackTerm.symbol.methodMember("doDerive").head), List(subTypeTypeTree))
+          val fallbackCallByNeedTerm = wrapInCallByNeedTerm(appliedFallbackTerm, subTypeTypeclassTree)
+          Apply(
+            fun = TypeApply(
+              fun = Select(
+                qualifier = subTypeObj,
+                symbol = subTypeConstrSymbol
+              ),
+              args = List(TypeTree.of[Typeclass], TypeTree.of[T], subTypeTypeTree)
+            ),
+            args = List(
+              /*name =*/ typeInfo(subTypeTypeTree.tpe).asTerm,
+              /*annotations =*/ Expr.ofList(filterAnnotations(subTypeSymbol.annotations).toSeq.map(_.asExpr)).asTerm,
+              /*typeAnnotations =*/ Expr.ofList(filterAnnotations(getTypeAnnotations(subTypeTypeTree.tpe)).toSeq.map(_.asExpr)).asTerm,
+              /*isObject =*/ Expr(isObject(subTypeTypeTree.tpe)).asTerm,
+              /*idx =*/ Expr(idx).asTerm,
+              /*cbn =*/ subTypeTypeclassTree.tpe.asType match {
+                case '[p] =>
+                  Expr.summon[p].map(_ => instance).getOrElse(fallbackCallByNeedTerm)
               }
+            )
+          ).asExprOf[SealedTrait.Subtype[Typeclass, T, _]]
       }
     }
 
   end getSubtypesImpl
 
-end MacroDerivationImpl
+end DerivationImpl

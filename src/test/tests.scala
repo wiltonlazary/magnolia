@@ -9,9 +9,7 @@ import scala.annotation.StaticAnnotation
 
 type ShowStr = [X] =>> Show[String, X]
 
-sealed trait Tree[+T] derives Eq
-object Tree:
-  given [T: [X] =>> Show[String, X]]: Show[String, Tree[T]] = Show.derived
+sealed trait Tree[+T]
 
 case class Leaf[+L](value: L) extends Tree[L]
 case class Branch[+B](left: Tree[B], right: Tree[B]) extends Tree[B]
@@ -213,12 +211,12 @@ enum Size:
 
 class Tests extends munit.FunSuite {
 
-  // test("work in some other way") {
-  //   sealed trait T
-  //   case class C(s: String) extends T
-  //   val res = Print.derived[T].print(C("XD"))
-  //   assertEquals(res, """C(XD)""")
-  // }
+  test("work in some other way") {
+    sealed trait T
+    case class C(s: String) extends T
+    val res = Print.derived[T].print(C("XD"))
+    assertEquals(res, """C(XD)""")
+  }
 
   test("work for a product type") {
     case class C(s: String)
@@ -260,18 +258,18 @@ class Tests extends munit.FunSuite {
     assertEquals(res, "Abc(a=12,b=54L,c=pm)")
   }
 
-  // test("construct a Show instance for a product with multiple default values") {
-  //   val res = Show.derived[ParamsWithDefault].show(ParamsWithDefault())
-  //   assertEquals(res, "ParamsWithDefault(a=3,b=4)")
-  // }
+  test("construct a Show instance for a product with multiple default values") {
+    val res = Show.derived[ParamsWithDefault].show(ParamsWithDefault())
+    assertEquals(res, "ParamsWithDefault(a=3,b=4)")
+  }
 
-  // test("local implicit beats Magnolia") {
-  //   given showPerson: Show[String, Person] = _ => "nobody"
-  //   val res = summon[Show[String, Address]].show(
-  //     Address("Home", Person("John Smith", 44))
-  //   )
-  //   assertEquals(res, "Address(line1=Home,occupant=nobody)")
-  // }
+  test("local implicit beats Magnolia") {
+    given showPerson: Show[String, Person] = _ => "nobody"
+    val res = summon[Show[String, Address]].show(
+      Address("Home", Person("John Smith", 44))
+    )
+    assertEquals(res, "Address(line1=Home,occupant=nobody)")
+  }
 
   // test("even low-priority implicit beats Magnolia for nested case") {
   //   val res =
@@ -310,17 +308,17 @@ class Tests extends munit.FunSuite {
   //   assert(res.contains("scala.deprecated"))
   // }
 
-  // test("test equality false") {
-  //   val res = Eq.derived[Entity].equal(Person("John Smith", 34), Person("", 0))
-  //   assert(!res)
-  // }
+  test("test equality false") {
+    val res = Eq.derived[Entity].equal(Person("John Smith", 34), Person("", 0))
+    assert(!res)
+  }
 
-  // test("test equality true") {
-  //   val res = Eq
-  //     .derived[Entity]
-  //     .equal(Person("John Smith", 34), Person("John Smith", 34))
-  //   assert(res)
-  // }
+  test("test equality true") {
+    val res = Eq
+      .derived[Entity]
+      .equal(Person("John Smith", 34), Person("John Smith", 34))
+    assert(res)
+  }
 
   // test("test branch equality true") {
   //   val res = Eq

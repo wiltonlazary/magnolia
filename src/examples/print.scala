@@ -7,7 +7,7 @@ trait Print[T] {
   def print(t: T): String
 }
 
-trait GenericPrint extends MacroDerivation[Print]:
+trait GenericPrint extends magnolia1.AutoDerivation[Print]:
   def join[T](ctx: CaseClass[Typeclass, T]): Print[T] = value =>
     if ctx.isValueClass then
       val param = ctx.params.head
