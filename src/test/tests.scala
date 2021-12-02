@@ -307,19 +307,19 @@ class Tests extends munit.FunSuite {
     assertEquals(res, "apple")
   }
 
-  // test("capture attributes against params") {
-  //   val res = summon[Show[String, Attributed]].show(Attributed("xyz", 100))
-  //   assertEquals(
-  //     res,
-  //     "Attributed{MyAnnotation(0)}{MyTypeAnnotation(2)}(p1{MyAnnotation(1)}{MyTypeAnnotation(0)}=xyz,p2{MyAnnotation(2)}{MyTypeAnnotation(1)}=100)"
-  //   )
-  // }
+  test("capture attributes against params") {
+    val res = summon[Show[String, Attributed]].show(Attributed("xyz", 100))
+    assertEquals(
+      res,
+      "Attributed{MyAnnotation(0)}{MyTypeAnnotation(2)}(p1{MyAnnotation(1)}{MyTypeAnnotation(0)}=xyz,p2{MyAnnotation(2)}{MyTypeAnnotation(1)}=100)"
+    )
+  }
 
-  // test("show the scala.deprecated annotation on a field") {
-  //   val res = summon[Show[String, Deprecated]].show(Deprecated(10))
-  //   assert(res.contains("MyAnnotation(0)"))
-  //   assert(res.contains("scala.deprecated"))
-  // }
+  test("show the scala.deprecated annotation on a field") {
+    val res = summon[Show[String, Deprecated]].show(Deprecated(10))
+    assert(res.contains("MyAnnotation(0)"))
+    assert(res.contains("scala.deprecated"))
+  }
 
   test("test equality false") {
     val res = Eq.derived[Entity].equal(Person("John Smith", 34), Person("", 0))
@@ -334,8 +334,7 @@ class Tests extends munit.FunSuite {
   }
 
   // test("test branch equality true") {
-  //   val res = Eq
-  //     .derived[Tree[String]]
+  //   val res = Eq.derived[Tree[String]]
   //     .equal(Branch(Leaf("one"), Leaf("two")), Branch(Leaf("one"), Leaf("two")))
   //   assert(res)
   // }

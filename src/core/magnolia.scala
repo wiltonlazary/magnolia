@@ -69,12 +69,10 @@ class DerivationImpl(using Quotes):
     case _ => false
 
   private def isObject(typeRepr: TypeRepr): Boolean =
-    import quotes.reflect.*
 
     typeRepr.typeSymbol.flags.is(Flags.Module)
 
   private def typeInfo(tpe: TypeRepr): Expr[TypeInfo] =
-    import quotes.reflect._
 
     def normalizedName(s: Symbol): String = if s.flags.is(Flags.Module) then s.name.stripSuffix("$") else s.name
     def name(tpe: TypeRepr): Expr[String] = tpe match
@@ -118,15 +116,35 @@ class DerivationImpl(using Quotes):
     TypeApply(Select.unique(t.asTerm, "asInstanceOf"), List(resultTypeTree)).asExprOf[S & T]
   }
 
+  private def paramAnnotations(tpe: TypeRepr): List[(String, List[Term])] =
+    val constructorAnnotations =
+      tpe.typeSymbol.primaryConstructor.paramSymss.flatten.map { field =>
+        field.name -> field.annotations
+          .filter(filterAnnotation)
+      }
+    val fieldAnnotations = tpe.typeSymbol.caseFields.collect {
+      case field: Symbol if field.tree.isInstanceOf[ValDef] =>
+        field.name -> field.annotations
+          .filter(filterAnnotation)
+    }
+    (constructorAnnotations ++ fieldAnnotations)
+      .groupBy(_._1)
+      .toList
+      .map { case (name, l) =>
+        name -> l.flatMap(_._2)
+      }
+      .map { (name, anns) => (name, anns) }
+
   private def getTypeAnnotations(t: TypeRepr): List[Term] = t match
     case AnnotatedType(inner, ann) => ann :: getTypeAnnotations(inner)
     case _                         => Nil
 
+  private def filterAnnotation(a: Term): Boolean =
+    a.tpe.typeSymbol.maybeOwner.isNoSymbol ||
+      a.tpe.typeSymbol.owner.fullName != "scala.annotation.internal"
+
   private def filterAnnotations(annotations: List[Term]): List[Term] =
-    annotations.filter { a =>
-      a.tpe.typeSymbol.maybeOwner.isNoSymbol ||
-        a.tpe.typeSymbol.owner.fullName != "scala.annotation.internal"
-    }
+    annotations.filter(filterAnnotation)
 
   private def termFromInlinedTypeApplyUnsafe(t: Term): Term = t match
     case Inlined(_, _, TypeApply(term, _)) => term
@@ -143,8 +161,8 @@ class DerivationImpl(using Quotes):
     val paramObj = '{CaseClass.Param}.asTerm
     val paramConstrSymbol = TypeRepr.of[CaseClass.Param.type].termSymbol.declaredMethod("apply").head
 
-    val annotations = paramAnns[T].to(Map)
-    val typeAnnotations = paramTypeAnns[T].to(Map)
+    val annotations = paramAnnotations(TypeRepr.of[T]).toMap
+    val typeAnnotations = paramTypeAnns[T]
 
     Expr.ofList {
       typeSymbol.caseFields.zipWithIndex.collect {
@@ -177,7 +195,7 @@ class DerivationImpl(using Quotes):
                   Expr.summon[p].map(_ => instance).getOrElse(fallbackCallByNeedTerm)
               ,
               /*defaultVal =*/ '{CallByNeed(None)}.asTerm,
-              /*annotations =*/ Expr.ofList(filterAnnotations(paramSymbol.annotations).toSeq.map(_.asExpr)).asTerm,
+              /*annotations =*/ Expr.ofList(annotations(paramSymbol.name).toSeq.map(_.asExpr)).asTerm,
               /*typeAnnotations =*/ Expr.ofList(filterAnnotations(getTypeAnnotations(paramTypeTree.tpe)).toSeq.map(_.asExpr)).asTerm
             )
           ).asExprOf[CaseClass.Param[Typeclass, T]]
