@@ -2,7 +2,7 @@ import com.softwaremill.UpdateVersionInDocs
 import com.softwaremill.SbtSoftwareMillCommon.commonSmlBuildSettings
 import com.softwaremill.Publish.{updateDocs, ossPublishSettings}
 
-val scala3 = "3.1.0"
+val scala3 = "3.1.2-RC1-bin-20211130-f6b6e50-NIGHTLY"
 
 ThisBuild / dynverTagPrefix := "scala3-v" // a custom prefix is needed to differentiate tags between scala2 & scala3 versions
 
@@ -31,6 +31,10 @@ lazy val core = (projectMatrix in file(".core"))
   .settings(commonSettings)
   .settings(
     name := "magnolia",
+    projectDependencies ++= Seq(
+      "com.lihaoyi" %% "pprint" % "0.6.6"
+    ),
+    scalacOptions ++= Seq("-Ydebug"),
     Compile / scalaSource := baseDirectory.value / ".." / ".." / ".." / "src" / "core",
     mimaPreviousArtifacts := {
       val minorUnchanged = previousStableVersion.value.flatMap(

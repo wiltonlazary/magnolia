@@ -160,13 +160,15 @@ trait MacroDerivation[TypeClass[_]]:
   def split[T](ctx: SealedTrait[Typeclass, T]): Typeclass[T]
   def join[T](ctx: CaseClass[Typeclass, T]): Typeclass[T]
 
-  inline def derived[T]: Typeclass[T] =
+  inline def derived[T]: Typeclass[T] = doDerive[T]
+
+  inline def doDerive[T]: Typeclass[T] = 
     inline if isProduct[T] then
       val cc = new CaseClass[Typeclass, T](
         typeInfo[T],
         isObject[T],
         isValueClass[T],
-        MacroDerivation.getParams[Typeclass, T],
+        MacroDerivation.getParams[Typeclass, T] { this },
         anns[T],
         typeAnns[T]
       ) {
@@ -176,7 +178,7 @@ trait MacroDerivation[TypeClass[_]]:
         def constructMonadic[M[_]: Monadic, PType: ClassTag](makeParam: Param => M[PType]): M[T] = ???
       }
       join(cc)
-    else inline if isSum[T] then
+    else
       val sealedTrait = SealedTrait[Typeclass, T](
         typeInfo[T],
         MacroDerivation.getSubtypes[Typeclass, T],
@@ -185,17 +187,15 @@ trait MacroDerivation[TypeClass[_]]:
         false
       )
       split(sealedTrait)
-    else
-      summonInline[Typeclass[T]]
 
 end MacroDerivation
 
 object MacroDerivation:
 
-  inline def getParams[Typeclass[_], T]: List[CaseClass.Param[Typeclass, T]] =
-    ${ getParamsImpl[Typeclass, T] }
-  def getParamsImpl[Typeclass[_]: Type, T: Type](using Quotes): Expr[List[CaseClass.Param[Typeclass, T]]] =
-    new MacroDerivationImpl(using quotes).getParamsImpl[Typeclass, T]
+  inline def getParams[Typeclass[_], T](fallback: MacroDerivation[Typeclass]): List[CaseClass.Param[Typeclass, T]] =
+    ${ getParamsImpl[Typeclass, T]('fallback) }
+  def getParamsImpl[Typeclass[_]: Type, T: Type](using Quotes)(fallback: Expr[MacroDerivation[Typeclass]]): Expr[List[CaseClass.Param[Typeclass, T]]] =
+    new MacroDerivationImpl(using quotes).getParamsImpl[Typeclass, T](fallback)
 
   inline def getSubtypes[Typeclass[_], T]: List[SealedTrait.Subtype[Typeclass, T, _]] =
     ${ getSubtypesImpl[Typeclass, T] }
@@ -206,8 +206,6 @@ end MacroDerivation
 
 class MacroDerivationImpl(using Quotes):
   import quotes.reflect.*
-
-  case class Proxy[A]()
 
   private def isRepeated[T](tpeRepr: TypeRepr): Boolean = tpeRepr match
     case a: AnnotatedType =>
@@ -229,7 +227,12 @@ class MacroDerivationImpl(using Quotes):
   private def termFromInlinedTypeApplyUnsafe(t: Term): Term = t match
     case Inlined(_, _, TypeApply(term, _)) => term
 
-  def getParamsImpl[Typeclass[_]: Type, T: Type]: Expr[List[CaseClass.Param[Typeclass, T]]] =
+  private def wrapInCallByNeedTerm(term: Term, tpt: TypeTree): Term =
+    val callByNeedTerm = '{CallByNeed}.asTerm
+    val callByNeedApply = TypeRepr.of[CallByNeed.type].termSymbol.declaredMethod("apply").head
+    Apply(TypeApply(Select(callByNeedTerm, callByNeedApply), List(tpt)), List(term))
+
+  def getParamsImpl[Typeclass[_]: Type, T: Type](fallback: Expr[MacroDerivation[Typeclass]]): Expr[List[CaseClass.Param[Typeclass, T]]] =
 
     val typeSymbol = TypeRepr.of[T].typeSymbol
 
@@ -247,9 +250,12 @@ class MacroDerivationImpl(using Quotes):
           val paramTypeclassTree = Applied(TypeTree.of[Typeclass], List(paramTypeTree))
           val summonInlineTerm = termFromInlinedTypeApplyUnsafe('{scala.compiletime.summonInline}.asTerm)
           val summonInlineApp = TypeApply(summonInlineTerm, List(paramTypeclassTree))
-          val callByNeedTerm = '{CallByNeed}.asTerm
-          val callByNeedApply = TypeRepr.of[CallByNeed.type].termSymbol.declaredMethod("apply").head
-          val instance = Apply(TypeApply(Select(callByNeedTerm, callByNeedApply), List(paramTypeclassTree)), List(summonInlineApp))
+          val instance = wrapInCallByNeedTerm(summonInlineApp, paramTypeclassTree)
+          val unit = '{()}.asTerm
+          val fallbackTerm = fallback.asTerm match
+            case Inlined(_, _, i) => i
+          val appliedFallbackTerm = TypeApply(Select(Ref(fallbackTerm.symbol), fallbackTerm.symbol.methodMember("doDerive").head), List(paramTypeTree))
+          val fallbackCallByNeedTerm = wrapInCallByNeedTerm(appliedFallbackTerm, paramTypeclassTree)
           Apply(
             fun = TypeApply(
               fun = Select(
@@ -262,7 +268,10 @@ class MacroDerivationImpl(using Quotes):
               /*name =*/ Expr(paramSymbol.name).asTerm,
               /*idx =*/ Expr(idx).asTerm,
               /*repeated =*/ Expr(isRepeated(paramTypeTree.tpe)).asTerm,
-              /*cbn =*/ instance, //TODO FIX ME
+              /*cbn =*/ paramTypeclassTree.tpe.asType match
+                case '[p] =>
+                  Expr.summon[p].map(_ => instance).getOrElse(fallbackCallByNeedTerm)
+              , //TODO FIX ME
               /*defaultVal =*/ '{CallByNeed(None)}.asTerm,
               /*annotations =*/ Expr.ofList(filterAnnotations(paramSymbol.annotations).toSeq.map(_.asExpr)).asTerm,
               /*typeAnnotations =*/ Expr.ofList(filterAnnotations(getTypeAnnotations(paramTypeTree.tpe)).toSeq.map(_.asExpr)).asTerm

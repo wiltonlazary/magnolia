@@ -233,32 +233,32 @@ class Tests extends munit.FunSuite {
     assertEquals(res, """C(XD,A(1))""")
   }
 
-  // test("work for nested product type without derives clause") {
-  //   case class A(a: Int)
-  //   case class C(s: String, a: A)
-  //   val res = Print.derived[C].print(C("XD", A(1)))
-  //   assertEquals(res, """C(XD,A(1))""")
-  // }
+  test("work for nested product type without derives clause") {
+    case class A(a: Int)
+    case class C(s: String, a: A)
+    val res = Print.derived[C].print(C("XD", A(1)))
+    assertEquals(res, """C(XD,A(1))""")
+  }
 
-  // test("construct a Show product instance with alternative apply functions") {
-  //   val res = Show.derived[TestEntry].show(TestEntry("a", "b"))
-  //   assertEquals(res, """TestEntry(param=Param(a=a,b=b))""")
-  // }
+  test("construct a Show product instance with alternative apply functions") {
+    val res = Show.derived[TestEntry].show(TestEntry("a", "b"))
+    assertEquals(res, """TestEntry(param=Param(a=a,b=b))""")
+  }
 
-  // test("construct a Show product instance") {
-  //   val res = Show.derived[Person].show(Person("John Smith", 34))
-  //   assertEquals(res, """Person(name=John Smith,age=34)""")
-  // }
+  test("construct a Show product instance") {
+    val res = Show.derived[Person].show(Person("John Smith", 34))
+    assertEquals(res, """Person(name=John Smith,age=34)""")
+  }
 
-  // test("construct a Show coproduct instance") {
-  //   val res = Show.derived[Person].show(Person("John Smith", 34))
-  //   assertEquals(res, "Person(name=John Smith,age=34)")
-  // }
+  test("construct a Show coproduct instance") {
+    val res = Show.derived[Person].show(Person("John Smith", 34))
+    assertEquals(res, "Person(name=John Smith,age=34)")
+  }
 
-  // test("construct a Show instance for product with partially private fields") {
-  //   val res = Show.derived[Abc].show(Abc(12, 54, "pm"))
-  //   assertEquals(res, "Abc(a=12,b=54L,c=pm)")
-  // }
+  test("construct a Show instance for product with partially private fields") {
+    val res = Show.derived[Abc].show(Abc(12, 54, "pm"))
+    assertEquals(res, "Abc(a=12,b=54L,c=pm)")
+  }
 
   // test("construct a Show instance for a product with multiple default values") {
   //   val res = Show.derived[ParamsWithDefault].show(ParamsWithDefault())
